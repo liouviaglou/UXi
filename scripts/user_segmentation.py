@@ -13,6 +13,7 @@ import datetime
 import os
 import itertools
 import argparse
+import pickle
 
 # Seaborn visualization library
 import seaborn as sns
@@ -193,7 +194,7 @@ def segm_kmeans (X, n_clusters, bystring=None, plots=False):
                                                 title=col, legend=True)[0].get_figure()
                 pdf.savefig(fig)   
             
-    return pred
+    return kmeans, pred
     
 def varimp (X, varlist, pred, c):
     """
@@ -214,9 +215,10 @@ def varimp (X, varlist, pred, c):
 
     """
     
-    # drop pred columns if they exist
-    X = X[varlist]
-    
+    # select only varlist columns, if they exist
+    # (may have gotten dropped by na elimination)
+    X = X.loc[:,X.columns.isin(varlist)]
+
     # one-hot encoding of pred == c
     ohcluster = np.where(pred==c, 1, 0)
     X_vars = X.columns.values.tolist()
@@ -345,49 +347,85 @@ if __name__ == "__main__":
     nclusters = args.nclusters
     alpha =  args.alpha
 
-    # Create Output Folder
-    datetime='{:%Y%m%d_%H%M%S}'.format(datetime.datetime.now())
-    outroot = r"../data/output/"+datetime
-    
-    try:
-        os.mkdir(outroot)
-    except OSError:
-        print ("Creation of the directory %s failed" % outroot)
-    else:
-        print ("Successfully created the directory %s " % outroot)
-
     inroot = r"../data/input/07 Samsung UX Index - Web App Implementation/"
     fname_data = inroot + r"Samsung UX Index Survey_Data.csv"
     df_data = pd.read_csv(fname_data)
     fname_vaxmap = inroot + r"Samsung UX Index Survey_Datamap.xlsx"
     df_varmap = pd.read_excel(fname_vaxmap, header=1, sheet_name=0)
     df_valmap = pd.read_excel(fname_vaxmap, header=1, sheet_name=1)
+  
     
-    varlist = ['qxdrivers_'+str(i+1) for i in range(34)]
+    SuperLabels = ['drivers', 'brandlovetrust', 'loyaltymetrics', 'overallquality',
+                  'usagemetrics', 'activitiesximportance','activitiexsquality',
+                  'activitiesxsatisfaction','activitiesxdrivers',
+                   'upgradetrans','ECGexpect']
     
-    X = dataprep_X (df_data, elbow=True, varlist=varlist, bystring='elbow')
+    SuperLabels = [x+"xallATTR" for x in SuperLabels]
+
+    SuperList = [['qxdrivers_'+str(i+1) for i in range(34)],
+                     [ x for x in df_data.columns if 'qxbrandx' in x ],
+                    ['qxadvocacy01_1',    'qxadvocacy02_1',    'qxretention_1',    'qxenrichment_1'],
+                    ['qxoverallxqualityxindicators_'+str(i+1) for i in range(4)],
+                    [ x for x in df_data.columns if 'qxactivitiesximportance' in x ],
+                    [ x for x in df_data.columns if 'qxactivitiesxqualityxindicators' in x ],
+                    [ x for x in df_data.columns if 'qxactivitiesxsatisfaction' in x ],
+                    [ x for x in df_data.columns if 'qxactivitiesxdrivers' in x ] ,
+                 ['qxupgrade01_1', 'qxupgrade01_2', 'qxupgrade01_3', 'qxupgrade01_4', 
+                  'qxupgrade01_5', 'qxupgrade01_6', 'qxupgrade01_7', 'qxupgrade01_8', 
+                  'qxtransition_1'],
+        [ 'att01_1','att01_2','att01_3','att02_1','att02_2','soc03','soc04_1',
+                  'soc04_2','soc04_3','ret06_1','qxexpectations' ]
+                    ]
     
-    # Geographic Grouping of state vars? d5x1
-    varlist_Z  = [ 'd1',    'd3_1',    'd3_2',    'd3_3',    'd3_4',    'd4', 'd6',    'd7_1',    
-                'd7_2',    'd7_3',    'd7_4',    'd7_5',    'd7_97',    'd7_99',]
+    varlist_Z  = ['d1',    'd3_1',    'd3_2',    'd3_3',    'd3_4',    'd4', 'd6',    'd7_1',    
+                'd7_2',    'd7_3',    'd7_4',    'd7_5',    'd7_97',    'd7_99','qxcurrentxos',
+                  'qxactivitiesxrecency_1', 'qxactivitiesxrecency_2', 'qxactivitiesxrecency_3', 
+                  'qxactivitiesxrecency_4', 'qxactivitiesxrecency_5', 'qxactivitiesxrecency_6', 
+                  'qxactivitiesxrecency_7', 'qxactivitiesxrecency_8', 'qxactivitiesxrecency_9', 
+                  'qxactivitiesxrecency_10', 'qxactivitiesxrecency_11', 'qxactivitiesxrecency_12', 
+                  'qxactivitiesxrecency_13', 'qxactivitiesxrecency_14', 'qxactivitiesxrecency_15', 
+                  'qxactivitiesxrecency_16', 'qxactivitiesxrecency_17', 'qxactivitiesxrecency_18', 
+                  'qxactivitiesxrecency_19', 'qxactivitiesxrecency_20', 'qxactivitiesxrecency_21', 
+                  'qxactivitiesxrecency_22', 'qxactivitiesxrecency_23', 'qxactivitiesxrecency_24'
+                  ]
     
-    ohdict = {'d4' :  None, 
+    ohdict = {'qxcurrentxos' :  None,
+              'd4' :  None, 
               'd1' : None, 
               'hidagemodels' : None,
             'qxcurrentxmodel': None,
              'hbrand' : None,
              'hmodelquota' : None,
+             'd3_1': None,
              'hmodelquota_reordered' : None,
              'Empowered_Customer_Groups' : None}
-
-    Z, df_varmap = dataprep_Z (df_data, df_varmap, df_valmap, varlist_Z=varlist_Z, ohdict=ohdict)
-     
-    pred = segm_kmeans (X, nclusters, bystring='byattitudes', plots=False)
-  
-    for viclust in range(nclusters):
-        vi = varimp (X, varlist, pred, viclust)
-        vi_mi = varimp_moreinfo (vi, df_varmap)
-        vi_mi.to_csv(outroot+'/Seg1_KNN'+str(nclusters)+'_vimi'+str(viclust)+'.csv', index=False)
+                 
     
-    Zcst = Zclust_stats(X, pred, Z, alpha=alpha, bystring='byattributes', plots=False)
-    Zcst.to_csv(outroot+'/Seg1_KNN'+str(nclusters)+'_zclust'+str(alpha)+'.csv', index=False)
+    for label, varlist in zip(SuperLabels,SuperList):
+        # Create Output Folder
+        timestamp='{:%Y%m%d_%H%M%S}'.format(datetime.datetime.now())
+        outroot = r"../data/output/"+timestamp+"_"+label
+
+        try:
+            os.mkdir(outroot)
+        except OSError:
+            print ("Creation of the directory %s failed" % outroot)
+        else:
+            print ("Successfully created the directory %s " % outroot)
+            
+        X = dataprep_X (df_data, elbow=True, varlist=varlist, bystring='elbow')
+
+        Z, df_varmap = dataprep_Z (df_data, df_varmap, df_valmap, varlist_Z=varlist_Z, ohdict=ohdict)
+
+        kmeans, pred = segm_kmeans (X, nclusters, bystring='byattitudes', plots=False)
+
+        for viclust in range(nclusters):
+            vi = varimp (X, varlist, pred, viclust)
+            vi_mi = varimp_moreinfo (vi, df_varmap)
+            vi_mi.to_csv(outroot+'/Seg1_KNN'+str(nclusters)+'_vimi'+str(viclust)+'.csv', index=False)
+
+        Zcst = Zclust_stats(X, pred, Z, alpha=alpha, bystring='byattributes', plots=False)
+        Zcst.to_csv(outroot+'/Seg1_KNN'+str(nclusters)+'_zclust'+str(alpha)+'.csv', index=False)
+
+        
+        pickle.dump( kmeans, open( outroot+'/kmeans.p', "wb" ) )
