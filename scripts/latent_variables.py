@@ -172,9 +172,9 @@ if __name__ == "__main__":
     df_valmap = pd.read_excel(fname_vaxmap, header=1, sheet_name=1)
     
     SuperLabels = ['upgradetrans','ECGexpect']
-#         'drivers', 'brandlovetrust', 'loyaltymetrics', 'overallquality',
-#                   'usagemetrics', 'activitiesximportance','activitiexsquality',
-#                   'activitiesxsatisfaction','activitiesxdrivers','upgradetrans','ECGexpect']
+        'drivers', 'brandlovetrust', 'loyaltymetrics', 'overallquality',
+                  'usagemetrics', 'activitiesximportance','activitiexsquality',
+                  'activitiesxsatisfaction','activitiesxdrivers','upgradetrans','ECGexpect']
 
     
     SuperList = [[ 'att01_1','att01_2','att01_3','att02_1','att02_2','soc03','soc04_1',
